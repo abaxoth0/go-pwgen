@@ -7,26 +7,33 @@ import (
 	"unsafe"
 )
 
-var lowLetters = "abcdefghijklmnopqrstuvwxyz"
-var upLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-var digits = "0123456789"
-var special = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+const (
+	lowLetters = "abcdefghijklmnopqrstuvwxyz"
+	upLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digits = "0123456789"
+	special = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+)
 
 const iBits = 6
 const iMask = 1<<iBits - 1
 const iMax = 63 / iBits
 
-var s = rand.NewSource(time.Now().UnixNano())
+var src = rand.NewSource(time.Now().UnixNano())
 
-type Options struct {
+type Config struct {
+	// Password length
 	Length  int
+	// Include lower-case latin letters
 	Lower   bool
+	// Include upper-case latin letters
 	Upper   bool
+	// Include digits (0..9)
 	Digits  bool
+	// Include special symbols: !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
 	Special bool
 }
 
-var opt = &Options{
+var defaultConfig = &Config{
 	Length:  16,
 	Lower:   true,
 	Upper:   true,
@@ -34,52 +41,53 @@ var opt = &Options{
 	Special: false,
 }
 
-func (o *Options) pool() (string, error) {
+func (c *Config) pool() (string, error) {
 	pool := ""
 
-	if o.Lower {
+	if c.Lower {
 		pool += lowLetters
 	}
-	if o.Upper {
+	if c.Upper {
 		pool += upLetters
 	}
-	if o.Digits {
+	if c.Digits {
 		pool += digits
 	}
-	if o.Special {
+	if c.Special {
 		pool += special
 	}
 	if pool == "" {
-		return "", errors.New("at least one character type must be selected")
+		return "", errors.New("At least one character type must be enabled in password generation config")
 	}
 
 	return pool, nil
 }
 
-func Generate(options *Options) (string, error) {
-	if options == nil {
-		options = opt
+// If config is nil then will be used default config (len - 16, all symbols, except special)
+func Generate(config *Config) (string, error) {
+	if config == nil {
+		config = defaultConfig
 	}
 
-	if options.Length <= 0 {
+	if config.Length <= 0 {
 		return "", errors.New("password length must be greater than 0")
 	}
 
-	pool, err := options.pool()
+	pool, err := config.pool()
 
 	if err != nil {
 		return "", err
 	}
 
-	b := make([]byte, options.Length)
+	buffer := make([]byte, config.Length)
 
-	for i, cache, remain := options.Length-1, s.Int63(), iMax; i >= 0; {
+	for i, cache, remain := config.Length-1, src.Int63(), iMax; i >= 0; {
 		if remain == 0 {
-			cache, remain = s.Int63(), iMax
+			cache, remain = src.Int63(), iMax
 		}
 
 		if idx := int(cache & iMask); idx < len(pool) {
-			b[i] = pool[idx]
+			buffer[i] = pool[idx]
 			i--
 		}
 
@@ -87,5 +95,6 @@ func Generate(options *Options) (string, error) {
 		remain--
 	}
 
-	return *(*string)(unsafe.Pointer(&b)), nil
+	return *(*string)(unsafe.Pointer(&buffer)), nil
 }
+
