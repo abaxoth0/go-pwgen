@@ -20,68 +20,53 @@ const iMax = 63 / iBits
 
 var src = rand.NewSource(time.Now().UnixNano())
 
-type Config struct {
-	// Password length
-	Length  int
-	// Include lower-case latin letters
-	Lower   bool
-	// Include upper-case latin letters
-	Upper   bool
-	// Include digits (0..9)
-	Digits  bool
-	// Include special symbols: !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
-	Special bool
-}
+const (
+	// Lower-case latin letters
+	LOWER uint8 = 1 << iota
+	// Upper-case latin letters
+	UPPER
+	// Digits (0..9)
+	DIGITS
+	// Special symbols: !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+	SPECIAL
+)
 
-var defaultConfig = &Config{
-	Length:  16,
-	Lower:   true,
-	Upper:   true,
-	Digits:  true,
-	Special: false,
-}
-
-func (c *Config) pool() (string, error) {
+func pool(charset uint8) (string, error) {
 	pool := ""
 
-	if c.Lower {
+	if charset&LOWER != 0 {
 		pool += lowLetters
 	}
-	if c.Upper {
+	if charset&UPPER != 0 {
 		pool += upLetters
 	}
-	if c.Digits {
+	if charset&DIGITS != 0 {
 		pool += digits
 	}
-	if c.Special {
+	if charset&SPECIAL != 0 {
 		pool += special
 	}
 	if pool == "" {
-		return "", errors.New("At least one character type must be enabled in password generation config")
+		return "", errors.New("Invalid character set: at least one character type must selected")
 	}
 
 	return pool, nil
 }
 
 // If config is nil then will be used default config (len - 16, all symbols, except special)
-func Generate(config *Config) (string, error) {
-	if config == nil {
-		config = defaultConfig
-	}
-
-	if config.Length <= 0 {
+func Generate(length int, charset uint8) (string, error) {
+	if length <= 0 {
 		return "", errors.New("password length must be greater than 0")
 	}
 
-	pool, err := config.pool()
-
+	pool, err := pool(charset)
 	if err != nil {
 		return "", err
 	}
 
-	buffer := make([]byte, config.Length)
+	buffer := make([]byte, length)
 
-	for i, cache, remain := config.Length-1, src.Int63(), iMax; i >= 0; {
+	for i, cache, remain := length-1, src.Int63(), iMax; i >= 0; {
 		if remain == 0 {
 			cache, remain = src.Int63(), iMax
 		}
